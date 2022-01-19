@@ -58,9 +58,9 @@ d1_norm <- d1 %>% mutate(Murder = (Murder - mean(d1$Murder))/sd(d1$Murder),
 optim2 <- optim(startParms,rms,data=d1_norm)
 optim2
 b0_t <- (optim2$par[1]*sd(d1$Murder))+mean(d1$Murder)
-b1_t <- (optim2$par[2]*sd(d1$Assault))+mean(d1$Assault)
-b2_t <- (optim2$par[3]*sd(d1$UrbanPop))+mean(d1$UrbanPop)
-b3_t <- (optim2$par[4]*sd(d1$Rape))+mean(d1$Rape)
+b1_t <- optim2$par[2]*(sd(d1$Murder)/sd(d1$Assault))
+b2_t <- optim2$par[3]*(sd(d1$Murder)/sd(d1$UrbanPop))
+b3_t <- optim2$par[4]*(sd(d1$Murder)/sd(d1$Rape))
 
 
 

@@ -65,4 +65,43 @@ b3_t <- optim2$par[4]*(sd(d1$Murder)/sd(d1$Rape))
 
 
 # **PART 2**
+## SAD model
+combinations <- t(combn(LETTERS[1:5],2))
+colnames(combinations) <- c('Op_X','Op_Y')
+prop <- c(.50,.45,.20,.05,.65,.35,.10,.70,.40,.85)
+dc <- c(1:4,1:3,1:2,1)
 
+exp_data <- data.frame(combinations,prop=prop,repeats=20,absol=20*prop,dc=dc)
+exp_data
+
+sad_model <- function(parms,data) {
+  a0 <- parms[1]
+  a1 <- parms[2]
+  dc <- data$dc
+  osd <- a0 + a1*dc
+  choice.prop <- exp(osd)/(1+exp(osd))
+  return(choice.prop)
+}
+
+myPred <- sad_model(c(1.5,-0.75),exp_data)
+cbind(exp_data[,1:3],myPred)
+
+mle_sad <- function(parms,data){
+  mypreds <- sad_model(parms,data)
+  probs.binom <- dbinom(x=data$absol,size=data$repeats,prob=mypreds,log=F)
+  probs.binom <- ifelse(probs.binom==0,0.001,
+                        ifelse(probs.binom==1,0.999,probs.binom))
+  ll <- -2*sum(log(probs.binom))
+  if(is.nan(ll)==T){
+    ll=10000
+  }
+  return(ll)
+}
+
+sad_solution <- optim(runif(2),mle_sad,data=exp_data)
+sad_solution
+  
+  
+  
+  
+}

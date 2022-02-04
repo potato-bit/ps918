@@ -55,3 +55,20 @@ qdiffusion(c(0.1, 0.5, 0.9), response = "upper",
 qdiffusion(c(0.1, 0.5, 0.9), response = "lower",
            a = a1, v = v1, t0 = t01,
            scale_p = TRUE)
+
+#MLE
+par1 <- c(a=0.8,v=1,t0=0.1)
+
+ll_diffusion <- function(pars,rt,response){
+  pred <- get_diffusion_df(a=par1[1],v=par1[2],t0=par1[3])
+  probs.binom <- dbinom(x=rt,size=response,prob=pred[,3],log=F)
+  probs.binom <- ifelse(probs.binom==0,0.001,
+                        ifelse(probs.binom==1,0.999,probs.binom))
+  ll <- -2*sum(log(probs.binom))
+  if(is.nan(ll)==T){
+    ll <- 10000
+  }
+  return(ll)
+}
+
+ll_diffusion(pars=par1,rt=d1$rt,response=d1$response)

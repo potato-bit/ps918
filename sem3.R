@@ -93,6 +93,78 @@ ll_logit <- function(pars,high,phigh,low,medium,risky.choice) {
 }
 
 sol2 <- with(dt,
-             nlminb(c(alpha=.3,tau=0.5),ll_logit, high=high, phigh=phigh, low=low,
+             nlminb(c(alpha=.1,tau=0.1),ll_logit, high=high, phigh=phigh, low=low,
                     medium=medium, risky.choice=risky.choice))
 sol2
+
+## aggregate data
+risk_logit <- with(dt,
+                   logit(alpha=sol2$par['alpha'],tau=sol2$par['tau'],high,phigh,low,medium))
+risk_logit_id <- aggregate(risk_logit, list(id=dt$id), mean)
+
+data_Pred2 <- as_tibble(data.frame(risk_data,risk_logit_id$x))
+names(data_Pred2) <- c('id','Data','Prediction')
+
+ggplot(data=data_Pred, aes(x=Data,y=Prediction)) + geom_point(color='black') + 
+  geom_abline(intercept=0,slope=1) + scale_y_continuous(limits=c(0,1)) + 
+  scale_x_continuous(limits=c(0,1))
+
+parameters <- expand.grid(alpha=seq(0,2,0.1),tau=seq(0,3,0.1))
+parameters$logll <- with(dt,apply(parameters,1,ll_logit,high=high,phigh=phigh,
+                                  low=low,medium=medium,
+                                  risky.choice=risky.choice))
+parameters$logll[parameters$logll==1e6] <- NA
+par(mar=c(1,1.5,2,2))
+with(parameters,
+     scatter3D(alpha,tau,logll,theta=20,phi=10,bty='g',ticktype='simple',pch=20,
+               cex=2, cex.lab=1.8, xlab='alpha', ylab='sigma', zlab='Log-Likelihood',
+               clab='LL'))
+
+##varying parameters 
+parms_tau <- as.data.frame(cbind(alpha=seq(0,2,0.1),tau=sol2$par['tau']))
+parms_tau$logll <- with(dt,
+                        apply(parms_tau,1,ll_logit,high=high,phigh=phigh,low=low,
+                              medium=medium,risky.choice=risky.choice))
+parms_tau$logll[parms_tau$logll==1e6] <- NA
+
+parms_alpha <- as.data.frame(cbind(alpha=sol2$par['alpha'],tau=seq(0,3,0.1)))
+parms_alpha$logll <- with(dt,
+                          apply(parms_alpha,1,ll_logit,high=high,phigh=phigh,
+                                low=low,medium=medium,risky.choice=risky.choice))
+parms_alpha$logll[parms_alpha$logll==1e6] <- NA
+
+p_tau <- ggplot(data=parms_tau,aes(x=alpha,y=logll))+
+  geom_point(colour="maroon", shape=21)+
+  theme_classic() +
+  theme(text=element_text(size=14)) +
+  labs(x=expression(alpha),y="Log-Likelihood",
+       title=bquote(tau == .(round(sol2$par["tau"],2))))
+p_alpha <- ggplot(data=parms_alpha,aes(x=tau,y=logll))+
+  geom_point(colour="maroon", shape=21)+
+  theme_classic() +
+  theme(text=element_text(size=14)) +
+  labs(x=expression(tau),y="Log-Likelihood",
+       title=bquote(alpha == .(round(sol2$par["alpha"],2))))
+
+ggarrange(p_tau,p_alpha,nrow=1)
+
+
+## grid-search
+alpha.start <- 0.88
+bias.start <- 1.1
+dt$Logit <- with(dt,logit(alpha=alpha.start,tau=bias.start,high,phigh,low,medium))
+head(dt)
+
+decision.generator <- function(probability){
+  r.prob <- runif(1,min=0,max=1)
+  choice <- ifelse(probability<=r.prob,1,0)
+}
+
+dt$simulated.responses <- sapply(X=dt$Logit,FUN=decision.generator,simplify=T)
+head(dt)
+
+## checking parameter recoverability
+solr <- with(dt,
+             nlminb(c(alpha=0.1,tau=0.1),ll_logit,high=high,phigh=phigh,
+                    medium=medium,low=low,risky.choice=simulated.responses))
+solr

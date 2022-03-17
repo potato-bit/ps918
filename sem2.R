@@ -60,15 +60,40 @@ qdiffusion(c(0.1, 0.5, 0.9), response = "lower",
 par1 <- c(a=0.8,v=1,t0=0.1)
 
 ll_diffusion <- function(pars,rt,response){
-  pred <- get_diffusion_df(a=par1[1],v=par1[2],t0=par1[3])
-  probs.binom <- dbinom(x=rt,size=response,prob=pred[,3],log=F)
-  probs.binom <- ifelse(probs.binom==0,0.001,
-                        ifelse(probs.binom==1,0.999,probs.binom))
-  ll <- -2*sum(log(probs.binom))
-  if(is.nan(ll)==T){
-    ll <- 10000
-  }
-  return(ll)
+  densities <- ddiffusion(rt=rt,response=response,
+                          a=pars['a'],v=pars['v'],t0=pars['t0'])
+  if (any(is.na(densities))) {densities=F} else {if (any(densities==0)) return(1e6)}
+  return(-2*sum(log(densities)))
 }
 
 ll_diffusion(pars=par1,rt=d1$rt,response=d1$response)
+
+## finding estimates
+res1 <- nlminb(par1, ll_diffusion, rt=d1$rt, response=d1$response, 
+               lower=c(0.001, -Inf, 0))
+res1
+
+### avoiding local optima
+get_start_values <- function(){
+  c(a=runif(1,0.5,3),
+    v=runif(1,0,2),
+    t=runif(1,0,0.2))
+}
+
+res2 <- nlminb(get_start_values(), ll_diffusion, rt=d1$rt, response=d1$response,
+               lower=c(0.001, -Inf, 0))
+res2
+
+### multiple iterations
+res3 <- replicate(n=5, simplify=T, {
+  resI <- nlminb(get_start_values(), ll_diffusion, rt=d1$rt, response=d1$response,
+                 lower=c(0.001,-Inf,0))
+  myres <- c(resI$par,logLik=-resI$objective,convergence=resI$convergence)
+  return(myres)
+})
+
+res3 <- as.data.frame(t(res3))
+res3
+
+which.max(res3$logLik)
+print(res3,digits=20)

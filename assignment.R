@@ -3,3 +3,69 @@ library(ggplot2)
 library(ggpubr)
 library(plot3D)
 library(tidyverse)
+library(readxl)
+
+# IMPORTING DATA AND DATA WRANGLING
+d1 <- as_tibble(read_excel('DATA_Study2_Rieskamp_2008_.xls',sheet=2))
+d1
+d2 <- as_tibble(read_excel('DATA_Study2_Rieskamp_2008_.xls',sheet=3))
+d2
+d3 <- as_tibble(read_excel('DATA_Study2_Rieskamp_2008_.xls',sheet=4))
+d3
+
+d2 <- d2[-c(1,2)]
+d2 <- d2 %>% rename(choicepair=`choice pair...3`)
+d2 <- d2 %>% pivot_longer(!choicepair,names_to='subject',values_to='choice')
+d2$subject <- as.numeric(d2$subject)
+d2 <- d2 %>% arrange(subject)
+
+d1 <- d1 %>% select(choicepair,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_payoff,B2_prob,B2_payoff)
+
+dt <- as_tibble(merge(d1,d2,by='choicepair'))
+dt <- dt %>% arrange(subject)
+dt <- dt %>% relocate(subject)
+
+# DATA EXPLORATION & VISUALISATION
+dt <- dt %>% mutate(EV_A=num((A1_prob*A1_payoff)+(A2_prob*A2_payoff),digits=4),
+    EV_B=num((B1_prob*B1_payoff)+(B2_prob*B2_payoff),digits=4))
+dt <- dt %>% mutate(EV_diff = (EV_A-EV_B))
+ggplot(dt,mapping=aes(x=EV_diff)) + geom_histogram()
+ggplot(dt,aes(x=EV_diff,y=choice)) + geom_point(size=0.1) + geom_smooth()
+
+
+# MODELLING
+## 1. Fit the model with the _alpha parameter for the curvature of the gains and losses function, and the _lambda parameter for
+## loss aversion
+
+### defining the model
+pt1 <- function(alpha,lambda,tau,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_payoff,B2_prob,B2_payoff) {
+    u <- function(x) {
+        result <- ifelse(x>=0,x^alpha,sign(x)*lambda*(abs(x)^alpha))
+        return(result)
+    }
+    EUA <- (A1_prob*u(A1_payoff)) + (A2_prob*u(A2_payoff))
+    EUB <- (B1_prob*u(B1_payoff)) + (B2_prob*u(B2_payoff))
+
+    pA <- 1/(1+(exp(-tau*(EUA-EUB))))
+    return(pA)
+}
+
+dt <- dt %>% mutate(pt1.PA=pt1(alpha=0.5,lambda=0.5,tau=1,A1_prob=A1_prob,A1_payoff=A1_payoff,A2_prob=A2_prob,
+    A2_payoff=A2_payoff,B1_prob=B1_prob,B1_payoff=B1_payoff,B2_prob=B2_prob,B2_payoff=B2_payoff))
+    
+
+
+### model fitting using LL
+ll_pt1 <- function(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2,choice) {
+    alpha <- pars[1]
+    lambda <- pars[2]
+    tau <- pars[3]
+    PA <- pt1(alpha,lambda,tau,A1p,A1,A2p,A2,B1p,B1,B2p,B2)
+    probs <- ifelse(choice==0,PA,1-PA)
+    if (any(probs==0)) return(1e6)
+    return(-sum(log(probs))) 
+}
+
+sol1 <- with(dt,nlminb(c(alpha=0.3,lambda=0.5,tau=0.5),ll_pt1,A1p=A1_prob,A1=A1_payoff,A2p=A2_prob,A2=A2_payoff,B1p=B1_prob,
+                            B1=B1_payoff,B2p=B2_prob,B2=B2_payoff,choice=choice))
+sol1

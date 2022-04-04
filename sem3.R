@@ -155,7 +155,7 @@ bias.start <- 1.1
 dt$Logit <- with(dt,logit(alpha=alpha.start,tau=bias.start,high,phigh,low,medium))
 head(dt)
 
-decision.generator <- function(probability){
+decision.generator <- function(probability) {
   r.prob <- runif(1,min=0,max=1)
   choice <- ifelse(probability<=r.prob,1,0)
 }

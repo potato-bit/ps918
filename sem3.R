@@ -149,22 +149,52 @@ p_alpha <- ggplot(data=parms_alpha,aes(x=tau,y=logll))+
 ggarrange(p_tau,p_alpha,nrow=1)
 
 
-## grid-search
-alpha.start <- 0.88
-bias.start <- 1.1
-dt$Logit <- with(dt,logit(alpha=alpha.start,tau=bias.start,high,phigh,low,medium))
-head(dt)
-
-decision.generator <- function(probability) {
-  r.prob <- runif(1,min=0,max=1)
-  choice <- ifelse(probability<=r.prob,1,0)
+## grid-search for local minima
+sol2
+get_start_values <- function() {
+  c(alpha=runif(1,0,1),
+    tau=runif(1,0,4))
 }
 
-dt$simulated.responses <- sapply(X=dt$Logit,FUN=decision.generator,simplify=T)
+sol3 <- replicate(n=10,simplify=TRUE,{
+  solI <- with(dt,nlminb(get_start_values(),ll_logit, high=high, phigh=phigh, low=low,
+                    medium=medium, risky.choice=risky.choice))
+  mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+  return(mysol)
+})
+
+sol3 <- as.data.frame(t(sol3))
+sol3
+which.max(sol3$logLik)
+print(sol3,digits=20)
+mle <- sol3[which.max(sol3$logLik),]
+mle
+
+#parameter recoverability
+alpha.start <- 0.88
+tau.start <- 1.1
+dt$Logit <- with(dt,logit(alpha=alpha.start,tau=tau.start,high,phigh,low,medium))
 head(dt)
 
-## checking parameter recoverability
-solr <- with(dt,
-             nlminb(c(alpha=0.1,tau=0.1),ll_logit,high=high,phigh=phigh,
-                    medium=medium,low=low,risky.choice=simulated.responses))
-solr
+decision_generator <- function(probability){
+  r.prob <- runif(1,0,1)
+  choice <- ifelse(probability <= r.prob, 1, 0)
+}
+
+PR <- replicate(n=5,simplify=TRUE, {
+  pars <- get_start_values()
+  alpha.start <- pars[1]
+  tau.start <- pars[2]
+  dt$Logit <- with(dt,logit(alpha=alpha.start,tau=tau.start,high,phigh,low,medium))
+  dt$simulated.responses <- sapply(X=dt$Logit,FUN=decision_generator,simplify=TRUE)
+  solR <- replicate(n=5,simplify=TRUE,{
+    solI <- with(dt,nlminb(get_start_values(),ll_logit, high=high, phigh=phigh, low=low,
+                    medium=medium, risky.choice=simulated.responses,upper=c(1,4)))
+    mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+    return(mysol)
+  })
+  solR <- as.data.frame(t(solR))
+  print(pars)
+  print(solR)
+})
+

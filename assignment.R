@@ -31,7 +31,7 @@ dt <- dt %>% mutate(EV_A=num((A1_prob*A1_payoff)+(A2_prob*A2_payoff),digits=4),
 dt <- dt %>% mutate(EV_diff = (EV_A-EV_B))
 ggplot(dt,mapping=aes(x=EV_diff)) + geom_histogram()
 ggplot(dt,aes(x=EV_diff,y=choice)) + geom_point(size=0.1) + geom_smooth()
-
+dt <- dt %>% rename(A1p=A1_prob,A1=A1_payoff,A2p=A2_prob,A2=A2_payoff,B1p=B1_prob,B1=B1_payoff,B2p=B2_prob,B2=B2_payoff)
 
 # MODELLING
 ## 1. Fit the model with the _alpha parameter for the curvature of the gains and losses function, and the _lambda parameter for
@@ -50,8 +50,7 @@ pt1 <- function(alpha,lambda,tau,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_
     return(pA)
 }
 
-dt <- dt %>% mutate(pt1.PA=pt1(alpha=0.5,lambda=0.5,tau=1,A1_prob=A1_prob,A1_payoff=A1_payoff,A2_prob=A2_prob,
-    A2_payoff=A2_payoff,B1_prob=B1_prob,B1_payoff=B1_payoff,B2_prob=B2_prob,B2_payoff=B2_payoff))
+dt <- dt %>% mutate(pt1.PA=pt1(alpha=0.5,lambda=0.5,tau=1,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
     
 
 
@@ -66,6 +65,23 @@ ll_pt1 <- function(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2,choice) {
     return(-sum(log(probs))) 
 }
 
-sol1 <- with(dt,nlminb(c(alpha=0.3,lambda=0.5,tau=0.5),ll_pt1,A1p=A1_prob,A1=A1_payoff,A2p=A2_prob,A2=A2_payoff,B1p=B1_prob,
-                            B1=B1_payoff,B2p=B2_prob,B2=B2_payoff,choice=choice))
+sol1 <- with(dt,nlminb(c(alpha=0.3,lambda=0.5,tau=0.5),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2p,choice=choice))
 sol1
+
+### grid-search for local minima
+sol1
+get_start_values1 <- function() {
+  c(alpha=runif(1,0,1),
+    lambda=runif(1,0,4),
+    tau=runif(1,0,4))
+}
+get_start_values1()
+sol1.lm <- replicate(n=5,simplify=TRUE,{
+    solI <- with(dt,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+    mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+    return(mysol)
+})
+sol1.lm <- as.data.frame(t(sol1.lm))
+sol1.lm
+
+#local minima?

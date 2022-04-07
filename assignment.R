@@ -84,4 +84,4 @@ sol1.lm <- replicate(n=5,simplify=TRUE,{
 sol1.lm <- as.data.frame(t(sol1.lm))
 sol1.lm
 
-#local minima?
+#local minima? 

@@ -38,7 +38,10 @@ dt <- dt %>% rename(A1p=A1_prob,A1=A1_payoff,A2p=A2_prob,A2=A2_payoff,B1p=B1_pro
 ## loss aversion
 
 ### defining the model
-pt1 <- function(alpha,lambda,tau,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_payoff,B2_prob,B2_payoff) {
+pt1 <- function(pars,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_payoff,B2_prob,B2_payoff) {
+    alpha <- pars[1]
+    lambda <- pars[2]
+    tau <- pars[3]
     u <- function(x) {
         result <- ifelse(x>=0,x^alpha,sign(x)*lambda*(abs(x)^alpha))
         return(result)
@@ -46,24 +49,19 @@ pt1 <- function(alpha,lambda,tau,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_
     EUA <- (A1_prob*u(A1_payoff)) + (A2_prob*u(A2_payoff))
     EUB <- (B1_prob*u(B1_payoff)) + (B2_prob*u(B2_payoff))
 
-    pA <- 1/(1+(exp(-tau*(EUA-EUB))))
+    pA <- 1/(1 + exp(-tau*(EUA-EUB)))
     return(pA)
-}
-
-dt <- dt %>% mutate(pt1.PA=pt1(alpha=0.5,lambda=0.5,tau=1,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
-    
+}    
 
 
 ### model fitting using LL
 ll_pt1 <- function(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2,choice) {
-    alpha <- pars[1]
-    lambda <- pars[2]
-    tau <- pars[3]
-    PA <- pt1(alpha,lambda,tau,A1p,A1,A2p,A2,B1p,B1,B2p,B2)
+    PA <- pt1(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2)
     probs <- ifelse(choice==0,PA,1-PA)
-    if (any(probs==0)) return(1e6)
+    if (any(probs==0 | is.na(probs))) return(1e6)
     return(-sum(log(probs))) 
 }
+
 
 sol1 <- with(dt,nlminb(c(alpha=0.3,lambda=0.5,tau=0.5),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2p,choice=choice))
 sol1
@@ -73,15 +71,45 @@ sol1
 get_start_values1 <- function() {
   c(alpha=runif(1,0,1),
     lambda=runif(1,0,4),
-    tau=runif(1,0,4))
+    tau=runif(1,0,10))
 }
 get_start_values1()
-sol1.lm <- replicate(n=5,simplify=TRUE,{
-    solI <- with(dt,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+sol1.lm <- replicate(n=50,simplify=TRUE,{
+    solI <- with(dt,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
+                        control=list(eval.max=400,iter.max=300)))
     mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
     return(mysol)
 })
 sol1.lm <- as.data.frame(t(sol1.lm))
-sol1.lm
-
+sol1.lm <- sol1.lm %>% filter(logLik!=-1e6,convergence==0)
+mle <- sol1.lm[which.max(sol1.lm$logLik),]
+mle
+which_max <- which(round(max(sol1.lm$logLik),3) == round(sol1.lm$logLik,3))
+which_max <- which_max[which_max != which.max(sol1.lm$logLik)]
+mle2 <- mle
+mle2[abs(mle[,1:3] - sol1.lm[which_max[1],1:3]) > 0.01, 1:3] <- NA
+mle2
 #local minima? 
+
+### running the function at the individual level
+multifits <- do.call(rbind, lapply(1:30, function(y){
+    dtsub <- subset(dt,subject==y)
+    sol <- replicate(n=50,simplify=TRUE,{
+        solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+        mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+        return(mysol)
+    })
+    sol <- as.data.frame(t(sol))
+    sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+
+    which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
+    which_max <- which_max[which_max != which.max(sol$logLik)]
+    mle <- sol[which.max(sol$logLik),]
+    return(mle)
+    #mle2 <- mle
+    #mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    #return(mle2)
+}))
+
+print(multifits,row.names=FALSE)
+multifits %>% summarise(mean(alpha))

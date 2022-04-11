@@ -92,7 +92,7 @@ mle2
 #local minima? 
 
 ### running the function at the individual level
-multifits <- do.call(rbind, lapply(1:30, function(y){
+multifits1 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
     sol <- replicate(n=50,simplify=TRUE,{
         solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
@@ -111,5 +111,155 @@ multifits <- do.call(rbind, lapply(1:30, function(y){
     #return(mle2)
 }))
 
-print(multifits,row.names=FALSE)
-multifits %>% summarise(mean(alpha))
+print(multifits1,row.names=FALSE)
+### aggregated results 
+multifits1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau))
+
+
+## 2. Include an additional parameter _beta to capture the curvature of the value function for losses
+
+### defining the model
+pt2 <- function(pars,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_payoff,B2_prob,B2_payoff) {
+    alpha <- pars[1]
+    beta <- pars[2]
+    lambda <- pars[3]
+    tau <- pars[4]
+    u <- function(x) {
+        result <- ifelse(x>=0,x^alpha,sign(x)*lambda*(abs(x)^beta))
+        return(result)
+    }
+    EUA <- (A1_prob*u(A1_payoff)) + (A2_prob*u(A2_payoff))
+    EUB <- (B1_prob*u(B1_payoff)) + (B2_prob*u(B2_payoff))
+
+    pA <- 1/(1 + exp(-tau*(EUA-EUB)))
+    return(pA)
+}
+ll_pt2 <- function(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2,choice) {
+    PA <- pt2(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2)
+    probs <- ifelse(choice==0,PA,1-PA)
+    if (any(probs==0 | is.na(probs))) return(1e6)
+    return(-sum(log(probs))) 
+}
+
+get_start_values2 <- function(){
+    c(alpha=runif(1,0,1),
+    beta=runif(1,0,1),
+    lambda=runif(1,0,4),
+    tau=runif(1,0,10))
+}
+
+### finding solution and grid-search for local minima
+sol2.lm <- replicate(n=50,simplify=TRUE,{
+    solI <- with(dt,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+    mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+    return(mysol)
+})
+sol2.lm <- as.data.frame(t(sol2.lm))
+sol2.lm <- sol2.lm %>% filter(logLik!=-1e6,convergence==0)
+mle <- sol2.lm[which.max(sol2.lm$logLik),]
+mle
+which_max <- which(round(max(sol2.lm$logLik),3) == round(sol2.lm$logLik,3))
+which_max <- which_max[which_max != which.max(sol2.lm$logLik)]
+mle2 <- mle
+mle2[abs(mle[,1:3] - sol2.lm[which_max[1],1:3]) > 0.01, 1:3] <- NA
+mle2
+
+### individual fitting
+multifits2 <- do.call(rbind, lapply(1:30, function(y) {
+    dtsub <- subset(dt,subject==y)
+    sol <- replicate(n=50,simplify=TRUE,{
+        solI <- with(dtsub,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+        mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+        return(mysol)
+    })
+    sol <- as.data.frame(t(sol))
+    sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+
+    which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
+    which_max <- which_max[which_max != which.max(sol$logLik)]
+    mle <- sol[which.max(sol$logLik),]
+    return(mle)
+    #mle2 <- mle
+    #mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    #return(mle2)
+}))
+
+print(multifits2,row.names=FALSE)
+### aggregated results 
+multifits2 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau))
+
+
+
+## 3. Include a power probability weighting function
+pt3 <- function(pars,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_payoff,B2_prob,B2_payoff) {
+    alpha <- pars[1]
+    beta <- pars[2]
+    lambda <- pars[3]
+    tau <- pars[4]
+    gamma <- pars[5]
+    u <- function(x) {
+        result <- ifelse(x>=0,x^alpha,sign(x)*lambda*(abs(x)^beta))
+        return(result)
+    }
+    EUA <- ((A1_prob^gamma)*u(A1_payoff)) + ((A2_prob^gamma)*u(A2_payoff))
+    EUB <- ((B1_prob^gamma)*u(B1_payoff)) + ((B2_prob^gamma)*u(B2_payoff))
+
+    pA <- 1/(1 + exp(-tau*(EUA-EUB)))
+    return(pA)
+}
+
+ll_pt3 <- function(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2,choice) {
+    PA <- pt3(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2)
+    probs <- ifelse(choice==0,PA,1-PA)
+    if (any(probs==0 | is.na(probs))) return(1e6)
+    return(-sum(log(probs))) 
+}
+
+get_start_values3 <- function() {
+    c(alpha=runif(1,0,1),
+    beta=runif(1,0,1),
+    lambda=runif(1,0,4),
+    tau=runif(1,0,10),
+    gamma=runif(1,0,10))
+}
+
+### finding solution and grid-search for local minima
+sol3.lm <- replicate(n=50,simplify=TRUE,{
+    solI <- with(dt,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+    mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+    return(mysol)
+})
+sol3.lm <- as.data.frame(t(sol3.lm))
+sol3.lm <- sol3.lm %>% filter(logLik!=-1e6,convergence==0)
+mle <- sol3.lm[which.max(sol3.lm$logLik),]
+mle
+which_max <- which(round(max(sol3.lm$logLik),3) == round(sol3.lm$logLik,3))
+which_max <- which_max[which_max != which.max(sol3.lm$logLik)]
+mle2 <- mle
+mle2[abs(mle[,1:3] - sol3.lm[which_max[1],1:3]) > 0.01, 1:3] <- NA
+mle2
+
+### individual fitting
+multifits3 <- do.call(rbind, lapply(1:30, function(y) {
+    dtsub <- subset(dt,subject==y)
+    sol <- replicate(n=50,simplify=TRUE,{
+        solI <- with(dtsub,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+        mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+        return(mysol)
+    })
+    sol <- as.data.frame(t(sol))
+    sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+
+    which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
+    which_max <- which_max[which_max != which.max(sol$logLik)]
+    mle <- sol[which.max(sol$logLik),]
+    return(mle)
+    #mle2 <- mle
+    #mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    #return(mle2)
+}))
+
+print(multifits3,row.names=FALSE)
+### aggregated results 
+multifits3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma))
+ 

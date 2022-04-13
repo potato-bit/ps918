@@ -48,6 +48,7 @@ pt1 <- function(pars,A1_prob,A1_payoff,A2_prob,A2_payoff,B1_prob,B1_payoff,B2_pr
     }
     EUA <- (A1_prob*u(A1_payoff)) + (A2_prob*u(A2_payoff))
     EUB <- (B1_prob*u(B1_payoff)) + (B2_prob*u(B2_payoff))
+    EU.diff <- EUA - EUB
 
     pA <- 1/(1 + exp(-tau*(EUA-EUB)))
     return(pA)
@@ -62,7 +63,6 @@ ll_pt1 <- function(pars,A1p,A1,A2p,A2,B1p,B1,B2p,B2,choice) {
     return(-sum(log(probs))) 
 }
 
-
 sol1 <- with(dt,nlminb(c(alpha=0.3,lambda=0.5,tau=0.5),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2p,choice=choice))
 sol1
 
@@ -70,11 +70,11 @@ sol1
 sol1
 get_start_values1 <- function() {
   c(alpha=runif(1,0,1),
-    lambda=runif(1,0,4),
+    lambda=runif(1,0,5),
     tau=runif(1,0,10))
 }
 get_start_values1()
-sol1.lm <- replicate(n=50,simplify=TRUE,{
+sol1.lm <- replicate(n=5,simplify=TRUE,{
     solI <- with(dt,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
                         control=list(eval.max=400,iter.max=300)))
     mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
@@ -94,13 +94,14 @@ mle2
 ### running the function at the individual level
 multifits1 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=50,simplify=TRUE,{
-        solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+    sol <- replicate(n=5,simplify=TRUE,{
+        solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
+                                    lower=c(0,0,0),upper=c(1,10,10)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
         return(mysol)
     })
     sol <- as.data.frame(t(sol))
-    sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+    #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
 
     which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
     which_max <- which_max[which_max != which.max(sol$logLik)]
@@ -113,7 +114,7 @@ multifits1 <- do.call(rbind, lapply(1:30, function(y) {
 
 print(multifits1,row.names=FALSE)
 ### aggregated results 
-multifits1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau))
+mf1_agg <- multifits1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
 
 
 ## 2. Include an additional parameter _beta to capture the curvature of the value function for losses
@@ -149,13 +150,14 @@ get_start_values2 <- function(){
 }
 
 ### finding solution and grid-search for local minima
-sol2.lm <- replicate(n=50,simplify=TRUE,{
-    solI <- with(dt,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+sol2.lm <- replicate(n=5,simplify=TRUE,{
+    solI <- with(dt,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
+                            lower=c(0,0,0,0),upper=c(1,1,10,10)))
     mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
     return(mysol)
 })
 sol2.lm <- as.data.frame(t(sol2.lm))
-sol2.lm <- sol2.lm %>% filter(logLik!=-1e6,convergence==0)
+#sol2.lm <- sol2.lm %>% filter(logLik!=-1e6,convergence==0)
 mle <- sol2.lm[which.max(sol2.lm$logLik),]
 mle
 which_max <- which(round(max(sol2.lm$logLik),3) == round(sol2.lm$logLik,3))
@@ -167,13 +169,14 @@ mle2
 ### individual fitting
 multifits2 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=50,simplify=TRUE,{
-        solI <- with(dtsub,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+    sol <- replicate(n=10,simplify=TRUE,{
+        solI <- with(dtsub,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
+                                    lower=c(0,0,0,0),upper=c(1,1,10,10)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
         return(mysol)
     })
     sol <- as.data.frame(t(sol))
-    sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+    #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
 
     which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
     which_max <- which_max[which_max != which.max(sol$logLik)]
@@ -186,7 +189,7 @@ multifits2 <- do.call(rbind, lapply(1:30, function(y) {
 
 print(multifits2,row.names=FALSE)
 ### aggregated results 
-multifits2 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau))
+mf2_agg <- multifits2 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
 
 
 
@@ -224,13 +227,14 @@ get_start_values3 <- function() {
 }
 
 ### finding solution and grid-search for local minima
-sol3.lm <- replicate(n=50,simplify=TRUE,{
-    solI <- with(dt,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+sol3.lm <- replicate(n=10,simplify=TRUE,{
+    solI <- with(dt,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
+                            lower=c(0,0,0,0,0),upper=c(1,1,10,10,Inf)))
     mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
     return(mysol)
 })
 sol3.lm <- as.data.frame(t(sol3.lm))
-sol3.lm <- sol3.lm %>% filter(logLik!=-1e6,convergence==0)
+#sol3.lm <- sol3.lm %>% filter(logLik!=-1e6,convergence==0)
 mle <- sol3.lm[which.max(sol3.lm$logLik),]
 mle
 which_max <- which(round(max(sol3.lm$logLik),3) == round(sol3.lm$logLik,3))
@@ -242,13 +246,14 @@ mle2
 ### individual fitting
 multifits3 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=50,simplify=TRUE,{
-        solI <- with(dtsub,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice))
+    sol <- replicate(n=10,simplify=TRUE,{
+        solI <- with(dtsub,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
+                                    lower=c(0,0,0,0,0),upper=c(1,1,10,10,Inf)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
         return(mysol)
     })
     sol <- as.data.frame(t(sol))
-    sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+    #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
 
     which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
     which_max <- which_max[which_max != which.max(sol$logLik)]
@@ -261,5 +266,8 @@ multifits3 <- do.call(rbind, lapply(1:30, function(y) {
 
 print(multifits3,row.names=FALSE)
 ### aggregated results 
-multifits3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma))
- 
+mf3_agg <- multifits3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
+
+
+# MODEL COMPARISON
+## Likelihood-Ratio Test

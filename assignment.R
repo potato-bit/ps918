@@ -4,6 +4,7 @@ library(ggpubr)
 library(plot3D)
 library(tidyverse)
 library(readxl)
+library(GGally)
 
 # IMPORTING DATA AND DATA WRANGLING
 d1 <- as_tibble(read_excel('DATA_Study2_Rieskamp_2008_.xls',sheet=2))
@@ -169,7 +170,7 @@ mle2
 ### individual fitting
 multifits2 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=10,simplify=TRUE,{
+    sol <- replicate(n=15,simplify=TRUE,{
         solI <- with(dtsub,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
                                     lower=c(0,0,0,0),upper=c(2,2,10,10)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
@@ -182,9 +183,9 @@ multifits2 <- do.call(rbind, lapply(1:30, function(y) {
     which_max <- which_max[which_max != which.max(sol$logLik)]
     mle <- sol[which.max(sol$logLik),]
     return(mle)
-    #mle2 <- mle
-    #mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
-    #return(mle2)
+    mle2 <- mle
+    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    return(mle2)
 }))
 
 print(multifits2,row.names=FALSE)
@@ -308,4 +309,80 @@ mf3_agg
 
 
 # VISUALISATION
+multifits1 %>% select(alpha,lambda,tau) %>% ggpairs()
+multifits2 %>% select(alpha,beta,lambda,tau) %>% ggpairs()
+multifits3 %>% select(alpha,beta,lambda,tau,gamma) %>% ggpairs()
 
+### add graphs of fits
+
+
+# PARAMETER RECOVERY
+decision_generator <- function(probability) {
+    r.prob <- runif(1,0,1)
+    choice <- ifelse(probability <= r.prob, 0, 1)
+}
+
+pars.pt1 <- c(mf1_agg$alpha,mf1_agg$lambda,mf1_agg$tau)
+pars.pt2 <- c(mf2_agg$alpha,mf2_agg$beta,mf2_agg$lambda,mf2_agg$tau)
+pars.pt3 <- c(mf3_agg$alpha,mf3_agg$beta,mf3_agg$lambda,mf3_agg$tau,mf3_agg$gamma)
+
+dt$pt1 <- with(dt,pt1(pars.pt1,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
+dt$pt2 <- with(dt,pt2(pars.pt2,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
+dt$pt3 <- with(dt,pt3(pars.pt3,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
+
+
+PR1 <- replicate(5, simplify=TRUE, {
+    dt$simulated.pt1 <- sapply(X=dt$pt1,FUN=decision_generator,simplify=TRUE)
+    columns  <-  c('alpha','lambda','tau','logLik')
+    df <- data.frame(matrix(ncol=4,nrow=0))
+    colnames(df) <- columns
+    multifits1.s <- do.call(rbind, lapply(1:30, function(y) {
+        dtsub <- subset(dt,subject==y)
+        sol <- replicate(n=10,simplify=TRUE,{
+            solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=simulated.pt1,
+                                        lower=c(0,0,0),upper=c(2,10,10)))
+            mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+            return(mysol)
+        })
+        sol <- as.data.frame(t(sol))
+        #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+
+        which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
+        which_max <- which_max[which_max != which.max(sol$logLik)]
+        mle <- sol[which.max(sol$logLik),]
+        return(mle)
+        mle2 <- mle
+        mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+        return(mle2)
+    }))
+    print(multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik)))
+    #df[nrow(df)+1] <- multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+    #return(df)
+
+})
+dt$simulated.pt1 <- sapply(X=dt$pt1,FUN=decision_generator,simplify=TRUE)
+multifits1.s <- do.call(rbind, lapply(1:30, function(y) {
+    dtsub <- subset(dt,subject==y)
+    sol <- replicate(n=10,simplify=TRUE,{
+        solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=simulated.pt1,
+                                    lower=c(0,0,0),upper=c(2,10,10)))
+        mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+        return(mysol)
+    })
+    sol <- as.data.frame(t(sol))
+    #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+
+    which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
+    which_max <- which_max[which_max != which.max(sol$logLik)]
+    mle <- sol[which.max(sol$logLik),]
+    return(mle)
+    mle2 <- mle
+    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    return(mle2)
+}))
+
+print(multifits1.s,row.names=FALSE)
+### aggregated results 
+mf1_agg.s <- multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+mf1_agg.s
+mf1_agg

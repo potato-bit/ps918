@@ -74,7 +74,7 @@ get_start_values1 <- function() {
     tau=runif(1,0,10))
 }
 get_start_values1()
-sol1.lm <- replicate(n=5,simplify=TRUE,{
+sol1.lm <- replicate(n=10,simplify=TRUE,{
     solI <- with(dt,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
                         control=list(eval.max=400,iter.max=300)))
     mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
@@ -94,9 +94,9 @@ mle2
 ### running the function at the individual level
 multifits1 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=5,simplify=TRUE,{
+    sol <- replicate(n=10,simplify=TRUE,{
         solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
-                                    lower=c(0,0,0),upper=c(1,10,10)))
+                                    lower=c(0,0,0),upper=c(2,10,10)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
         return(mysol)
     })
@@ -107,15 +107,15 @@ multifits1 <- do.call(rbind, lapply(1:30, function(y) {
     which_max <- which_max[which_max != which.max(sol$logLik)]
     mle <- sol[which.max(sol$logLik),]
     return(mle)
-    #mle2 <- mle
-    #mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
-    #return(mle2)
+    mle2 <- mle
+    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    return(mle2)
 }))
 
 print(multifits1,row.names=FALSE)
 ### aggregated results 
 mf1_agg <- multifits1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
-
+mf1_agg
 
 ## 2. Include an additional parameter _beta to capture the curvature of the value function for losses
 
@@ -150,7 +150,7 @@ get_start_values2 <- function(){
 }
 
 ### finding solution and grid-search for local minima
-sol2.lm <- replicate(n=5,simplify=TRUE,{
+sol2.lm <- replicate(n=10,simplify=TRUE,{
     solI <- with(dt,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
                             lower=c(0,0,0,0),upper=c(1,1,10,10)))
     mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
@@ -171,7 +171,7 @@ multifits2 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
     sol <- replicate(n=10,simplify=TRUE,{
         solI <- with(dtsub,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
-                                    lower=c(0,0,0,0),upper=c(1,1,10,10)))
+                                    lower=c(0,0,0,0),upper=c(2,2,10,10)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
         return(mysol)
     })
@@ -190,7 +190,7 @@ multifits2 <- do.call(rbind, lapply(1:30, function(y) {
 print(multifits2,row.names=FALSE)
 ### aggregated results 
 mf2_agg <- multifits2 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
-
+mf2_agg
 
 
 ## 3. Include a power probability weighting function
@@ -227,9 +227,9 @@ get_start_values3 <- function() {
 }
 
 ### finding solution and grid-search for local minima
-sol3.lm <- replicate(n=10,simplify=TRUE,{
+sol3.lm <- replicate(n=15,simplify=TRUE,{
     solI <- with(dt,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
-                            lower=c(0,0,0,0,0),upper=c(1,1,10,10,Inf)))
+                            lower=c(0,0,0,0,0),upper=c(2,2,10,10,Inf)))
     mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
     return(mysol)
 })
@@ -246,9 +246,9 @@ mle2
 ### individual fitting
 multifits3 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=10,simplify=TRUE,{
+    sol <- replicate(n=15,simplify=TRUE,{
         solI <- with(dtsub,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
-                                    lower=c(0,0,0,0,0),upper=c(1,1,10,10,Inf)))
+                                    lower=c(0,0,0,0,0),upper=c(2,2,10,10,Inf)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
         return(mysol)
     })
@@ -259,15 +259,53 @@ multifits3 <- do.call(rbind, lapply(1:30, function(y) {
     which_max <- which_max[which_max != which.max(sol$logLik)]
     mle <- sol[which.max(sol$logLik),]
     return(mle)
-    #mle2 <- mle
-    #mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
-    #return(mle2)
+    mle2 <- mle
+    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    return(mle2)
 }))
 
 print(multifits3,row.names=FALSE)
 ### aggregated results 
 mf3_agg <- multifits3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
+mf3_agg
+
 
 
 # MODEL COMPARISON
 ## Likelihood-Ratio Test
+### Model 2 is a nested version of Model 3 where $\gamma$ is equal to 1. Is Model 1 a nested version of Model 2 where 
+### $\beta$ = $\alpha$
+
+l.specific <- mf2_agg$logLik
+l.general <- mf3_agg$logLik
+chi.stat <- -2*(l.specific - l.general)
+1 - pchisq(chi.stat,30)
+### we reject the null hypothesis, the general model fits the data better
+
+## AIC Test
+columns <- c('model','logLik','K','N')
+dc <- data.frame(matrix(ncol=4,nrow=0))
+colnames(dc) <- columns
+
+AIC.pt1 <- c('pt1',mf1_agg$logLik,3,30)
+AIC.pt2 <- c('pt2',mf2_agg$logLik,4,30)
+AIC.pt3 <- c('pt3',mf3_agg$logLik,5,30)
+
+dc[nrow(dc)+1,] <- AIC.pt1
+dc[nrow(dc)+1,] <- AIC.pt2
+dc[nrow(dc)+1,] <- AIC.pt3
+
+dc <- as_tibble(dc)
+dc$logLik <- as.numeric(dc$logLik)
+dc$K <- as.numeric(dc$K)
+dc$N <- as.numeric(dc$N)
+dc
+dc <- dc %>% mutate(AIC=(-2*logLik)+(2*K*N))
+dc[which.min(dc$AIC),]
+### Model 3 has the lowest IC value, corroborates results from Likelihood Ratio Test
+mf3_agg
+
+
+
+# VISUALISATION
+

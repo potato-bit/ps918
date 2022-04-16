@@ -5,6 +5,7 @@ library(plot3D)
 library(tidyverse)
 library(readxl)
 library(GGally)
+library(yardstick)
 
 # IMPORTING DATA AND DATA WRANGLING
 d1 <- as_tibble(read_excel('DATA_Study2_Rieskamp_2008_.xls',sheet=2))
@@ -247,9 +248,9 @@ mle2
 ### individual fitting
 multifits3 <- do.call(rbind, lapply(1:30, function(y) {
     dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=15,simplify=TRUE,{
+    sol <- replicate(n=20,simplify=TRUE,{
         solI <- with(dtsub,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=choice,
-                                    lower=c(0,0,0,0,0),upper=c(2,2,10,10,Inf)))
+                                    lower=c(0,0,0,0,0),upper=c(2,2,10,10,1.5)))
         mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
         return(mysol)
     })
@@ -313,76 +314,125 @@ multifits1 %>% select(alpha,lambda,tau) %>% ggpairs()
 multifits2 %>% select(alpha,beta,lambda,tau) %>% ggpairs()
 multifits3 %>% select(alpha,beta,lambda,tau,gamma) %>% ggpairs()
 
+multifits3 %>% ggplot(aes(x=logLik)) + geom_histogram(bins=8)
+
+logLik_avg <- (multifits1$logLik + multifits2$logLik + multifits3$logLik)/3
+logLik_avg
+plot(x=-logLik_avg,type='h')
 ### add graphs of fits
 
 
 # PARAMETER RECOVERY
+## double-check the decision generator function
 decision_generator <- function(probability) {
     r.prob <- runif(1,0,1)
-    choice <- ifelse(probability <= r.prob, 0, 1)
+    choice <- ifelse(probability <= r.prob, 1, 0)
 }
 
 pars.pt1 <- c(mf1_agg$alpha,mf1_agg$lambda,mf1_agg$tau)
 pars.pt2 <- c(mf2_agg$alpha,mf2_agg$beta,mf2_agg$lambda,mf2_agg$tau)
 pars.pt3 <- c(mf3_agg$alpha,mf3_agg$beta,mf3_agg$lambda,mf3_agg$tau,mf3_agg$gamma)
 
-dt$pt1 <- with(dt,pt1(pars.pt1,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
-dt$pt2 <- with(dt,pt2(pars.pt2,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
-dt$pt3 <- with(dt,pt3(pars.pt3,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
 
+N.sim <- 200    #number of simulated subjects
+dp <- setNames(data.frame(matrix(ncol=12,nrow=0)), c('subject','choicepair','A1p','A1','A2p','A2','B1p','B1',
+                                                    'B2p','B2','pt1','simulated.pt1'))
+#generating simulated data
+for (k in 1:N.sim) {
+    dfN <- d1
+    dfN <- dfN %>% rename(A1p=A1_prob,A1=A1_payoff,A2p=A2_prob,A2=A2_payoff,
+                            B1p=B1_prob,B1=B1_payoff,B2p=B2_prob,B2=B2_payoff)
+    dfN$subject <- k
+    dfN <- dfN %>% relocate(subject)
+
+    dfN$pt1 <- with(dfN,pt1(pars.pt1,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
+    dfN$pt2 <- with(dfN,pt2(pars.pt2,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
+    dfN$pt3 <- with(dfN,pt3(pars.pt3,A1p,A1,A2p,A2,B1p,B1,B2p,B2))
+
+    dfN$simulated.pt1 <- sapply(X=dfN$pt1,FUN=decision_generator,simplify=TRUE)
+    dfN$simulated.pt2 <- sapply(X=dfN$pt2,FUN=decision_generator,simplify=TRUE)
+    dfN$simulated.pt3 <- sapply(X=dfN$pt3,FUN=decision_generator,simplify=TRUE)
+
+    dp <- rbind(dp,dfN)
+}
 
 PR1 <- replicate(5, simplify=TRUE, {
-    dt$simulated.pt1 <- sapply(X=dt$pt1,FUN=decision_generator,simplify=TRUE)
-    columns  <-  c('alpha','lambda','tau','logLik')
-    df <- data.frame(matrix(ncol=4,nrow=0))
-    colnames(df) <- columns
-    multifits1.s <- do.call(rbind, lapply(1:30, function(y) {
-        dtsub <- subset(dt,subject==y)
-        sol <- replicate(n=10,simplify=TRUE,{
-            solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=simulated.pt1,
+    columns <- c('alpha','lambda','tau','logLik')
+    dfp <- setNames(data.frame(matrix(ncol=4,nrow=0)), columns)
+    multifits1.s <- do.call(rbind, lapply(1:N.sim, function(y) {
+        dfsub <- subset(dp,subject==y)
+        sol <- replicate(n=10,simplify=TRUE, {
+            solI <- with(dfsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=simulated.pt1,
                                         lower=c(0,0,0),upper=c(2,10,10)))
             mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
             return(mysol)
         })
         sol <- as.data.frame(t(sol))
-        #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
-
         which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
         which_max <- which_max[which_max != which.max(sol$logLik)]
         mle <- sol[which.max(sol$logLik),]
         return(mle)
-        mle2 <- mle
-        mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
-        return(mle2)
     }))
-    print(multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik)))
-    #df[nrow(df)+1] <- multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
-    #return(df)
-
+    mf_agg <- multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+    dfp <- rbind(dfp,mf_agg)
+    return(dfp)
 })
-dt$simulated.pt1 <- sapply(X=dt$pt1,FUN=decision_generator,simplify=TRUE)
-multifits1.s <- do.call(rbind, lapply(1:30, function(y) {
-    dtsub <- subset(dt,subject==y)
-    sol <- replicate(n=10,simplify=TRUE,{
-        solI <- with(dtsub,nlminb(get_start_values1(),ll_pt1,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=simulated.pt1,
-                                    lower=c(0,0,0),upper=c(2,10,10)))
-        mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
-        return(mysol)
-    })
-    sol <- as.data.frame(t(sol))
-    #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+PR1 <- as.data.frame(t(PR1))
+PR1[,1:4] <- apply(PR1[,1:4],2,function(x) as.numeric(as.character(x)))
+PR1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+# parameters are recoverable
 
-    which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
-    which_max <- which_max[which_max != which.max(sol$logLik)]
-    mle <- sol[which.max(sol$logLik),]
-    return(mle)
-    mle2 <- mle
-    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
-    return(mle2)
-}))
+PR2 <- replicate(5, simplify=TRUE, {
+    columns <- c('alpha','beta','lambda','tau','logLik')
+    dfp <- setNames(data.frame(matrix(ncol=5,nrow=0)), columns)
+    multifits2.s <- do.call(rbind, lapply(1:N.sim, function(y) {
+        dfsub <- subset(dp,subject==y)
+        sol <- replicate(n=10,simplify=TRUE, {
+            solI <- with(dfsub,nlminb(get_start_values2(),ll_pt2,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=simulated.pt2,
+                                        lower=c(0,0,0,0),upper=c(2,2,10,10)))
+            mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+            return(mysol)
+        })
+        sol <- as.data.frame(t(sol))
+        which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
+        which_max <- which_max[which_max != which.max(sol$logLik)]
+        mle <- sol[which.max(sol$logLik),]
+        return(mle)
+    }))
+    mf_agg <- multifits2.s %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+    dfp <- rbind(dfp,mf_agg)
+    return(dfp)
+})
+PR2 <- as.data.frame(t(PR2))
+PR2[,1:5] <- apply(PR2[,1:5],2,function(x) as.numeric(as.character(x)))
+PR2 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+mf2_agg
+# alpha and beta are recoverable, but not lambda or tau
 
-print(multifits1.s,row.names=FALSE)
-### aggregated results 
-mf1_agg.s <- multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
-mf1_agg.s
-mf1_agg
+
+PR3 <- replicate(5, simplify=TRUE, {
+    columns <- c('alpha','beta','lambda','tau','gamma','logLik')
+    dfp <- setNames(data.frame(matrix(ncol=6,nrow=0)), columns)
+    multifits3.s <- do.call(rbind, lapply(1:N.sim, function(y) {
+        dfsub <- subset(dp,subject==y)
+        sol <- replicate(n=10,simplify=TRUE, {
+            solI <- with(dfsub,nlminb(get_start_values3(),ll_pt3,A1p=A1p,A1=A1,A2p=A2p,A2=A2,B1p=B1p,B1=B1,B2p=B2p,B2=B2,choice=simulated.pt3,
+                                        lower=c(0,0,0,0,0),upper=c(2,2,10,10,1)))
+            mysol <- c(solI$par,logLik=-solI$objective,convergence=solI$convergence)
+            return(mysol)
+        })
+        sol <- as.data.frame(t(sol))
+        which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
+        which_max <- which_max[which_max != which.max(sol$logLik)]
+        mle <- sol[which.max(sol$logLik),]
+        return(mle)
+    }))
+    mf_agg <- multifits3.s %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
+    dfp <- rbind(dfp,mf_agg)
+    return(dfp)
+})
+PR3 <- as.data.frame(t(PR3))
+PR3[,1:6] <- apply(PR3[,1:6],2,function(x) as.numeric(as.character(x)))
+PR3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
+mf3_agg
+# parameters are recoverable except for lambda

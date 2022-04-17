@@ -83,13 +83,12 @@ sol1.lm <- replicate(n=10,simplify=TRUE,{
     return(mysol)
 })
 sol1.lm <- as.data.frame(t(sol1.lm))
-sol1.lm <- sol1.lm %>% filter(logLik!=-1e6,convergence==0)
-mle <- sol1.lm[which.max(sol1.lm$logLik),]
-mle
+npars <- length(get_start_values1())
 which_max <- which(round(max(sol1.lm$logLik),3) == round(sol1.lm$logLik,3))
 which_max <- which_max[which_max != which.max(sol1.lm$logLik)]
+mle <- sol1.lm[which.max(sol1.lm$logLik),]
 mle2 <- mle
-mle2[abs(mle[,1:3] - sol1.lm[which_max[1],1:3]) > 0.01, 1:3] <- NA
+mle2[,1:npars][abs(mle[,1:npars] - sol1.lm[which_max[1],1:npars]) > 0.01] <- NA
 mle2
 #local minima? 
 
@@ -104,19 +103,20 @@ multifits1 <- do.call(rbind, lapply(1:30, function(y) {
     })
     sol <- as.data.frame(t(sol))
     #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
+    npars <- length(get_start_values1())
 
     which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
     which_max <- which_max[which_max != which.max(sol$logLik)]
     mle <- sol[which.max(sol$logLik),]
-    return(mle)
     mle2 <- mle
-    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    mle2[,1:npars][abs(mle[, 1:npars] - sol[which_max[1], 1:npars]) > 0.01] <- NA
     return(mle2)
 }))
 
 print(multifits1,row.names=FALSE)
 ### aggregated results 
-mf1_agg <- multifits1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+mf1_agg <- multifits1 %>% summarise(alpha=mean(alpha,na.rm=TRUE),lambda=mean(lambda,na.rm=TRUE),
+                                    tau=mean(tau,na.rm=TRUE),logLik=sum(logLik,na.rm=TRUE))
 mf1_agg
 
 ## 2. Include an additional parameter _beta to capture the curvature of the value function for losses
@@ -160,12 +160,13 @@ sol2.lm <- replicate(n=10,simplify=TRUE,{
 })
 sol2.lm <- as.data.frame(t(sol2.lm))
 #sol2.lm <- sol2.lm %>% filter(logLik!=-1e6,convergence==0)
-mle <- sol2.lm[which.max(sol2.lm$logLik),]
-mle
-which_max <- which(round(max(sol2.lm$logLik),3) == round(sol2.lm$logLik,3))
+npars <- length(get_start_values2())
+
+which_max <- which(round(max(sol2.lm$logLik),3)==round(sol2.lm$logLik,3))
 which_max <- which_max[which_max != which.max(sol2.lm$logLik)]
+mle <- sol2.lm[which.max(sol2.lm$logLik),]
 mle2 <- mle
-mle2[abs(mle[,1:3] - sol2.lm[which_max[1],1:3]) > 0.01, 1:3] <- NA
+mle2[,1:npars][abs(mle[, 1:npars] - sol2.lm[which_max[1], 1:npars]) > 0.01] <- NA
 mle2
 
 ### individual fitting
@@ -180,18 +181,20 @@ multifits2 <- do.call(rbind, lapply(1:30, function(y) {
     sol <- as.data.frame(t(sol))
     #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
 
+    npars <- length(get_start_values2())
+
     which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
     which_max <- which_max[which_max != which.max(sol$logLik)]
     mle <- sol[which.max(sol$logLik),]
-    return(mle)
     mle2 <- mle
-    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    mle2[,1:npars][abs(mle[, 1:npars] - sol[which_max[1], 1:npars]) > 0.01] <- NA
     return(mle2)
 }))
 
 print(multifits2,row.names=FALSE)
 ### aggregated results 
-mf2_agg <- multifits2 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+mf2_agg <- multifits2 %>% summarise(alpha=mean(alpha,na.rm=TRUE),beta=mean(beta,na.rm=TRUE),lambda=mean(lambda,na.rm=TRUE),
+                                    tau=mean(tau,na.rm=TRUE),logLik=sum(logLik,na.rm=TRUE))
 mf2_agg
 
 
@@ -237,12 +240,13 @@ sol3.lm <- replicate(n=15,simplify=TRUE,{
 })
 sol3.lm <- as.data.frame(t(sol3.lm))
 #sol3.lm <- sol3.lm %>% filter(logLik!=-1e6,convergence==0)
-mle <- sol3.lm[which.max(sol3.lm$logLik),]
-mle
-which_max <- which(round(max(sol3.lm$logLik),3) == round(sol3.lm$logLik,3))
+npars <- length(get_start_values3())
+
+which_max <- which(round(max(sol3.lm$logLik),3)==round(sol3.lm$logLik,3))
 which_max <- which_max[which_max != which.max(sol3.lm$logLik)]
+mle <- sol3.lm[which.max(sol3.lm$logLik),]
 mle2 <- mle
-mle2[abs(mle[,1:3] - sol3.lm[which_max[1],1:3]) > 0.01, 1:3] <- NA
+mle2[,1:npars][abs(mle[, 1:npars] - sol3.lm[which_max[1], 1:npars]) > 0.01] <- NA
 mle2
 
 ### individual fitting
@@ -257,18 +261,20 @@ multifits3 <- do.call(rbind, lapply(1:30, function(y) {
     sol <- as.data.frame(t(sol))
     #sol <- sol %>% filter(logLik!=-1e6,convergence==0)
 
+    npars <- length(get_start_values3())
+
     which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
     which_max <- which_max[which_max != which.max(sol$logLik)]
     mle <- sol[which.max(sol$logLik),]
-    return(mle)
     mle2 <- mle
-    mle2[abs(mle[, 1:3] - sol[which_max[1], 1:3]) > 0.01, 1:3] <- NA
+    mle2[,1:npars][abs(mle[, 1:npars] - sol[which_max[1], 1:npars]) > 0.01] <- NA
     return(mle2)
 }))
 
 print(multifits3,row.names=FALSE)
 ### aggregated results 
-mf3_agg <- multifits3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
+mf3_agg <- multifits3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),
+                                    tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
 mf3_agg
 
 
@@ -368,19 +374,26 @@ PR1 <- replicate(5, simplify=TRUE, {
             return(mysol)
         })
         sol <- as.data.frame(t(sol))
+        npars <- length(get_start_values1())
+
         which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
         which_max <- which_max[which_max != which.max(sol$logLik)]
         mle <- sol[which.max(sol$logLik),]
-        return(mle)
+        mle2 <- mle
+        mle2[,1:npars][abs(mle[, 1:npars] - sol[which_max[1], 1:npars]) > 0.01] <- NA
+        return(mle2)
     }))
-    mf_agg <- multifits1.s %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+    mf_agg <- multifits1.s %>% summarise(alpha=mean(alpha,na.rm=TRUE),lambda=mean(lambda,na.rm=TRUE),
+                                        tau=mean(tau,na.rm=TRUE),logLik=sum(logLik,na.rm=TRUE))
     dfp <- rbind(dfp,mf_agg)
     return(dfp)
 })
 PR1 <- as.data.frame(t(PR1))
 PR1[,1:4] <- apply(PR1[,1:4],2,function(x) as.numeric(as.character(x)))
-PR1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+PR1 %>% summarise(alpha=mean(alpha),lambda=mean(lambda,na.rm=TRUE),tau=mean(tau,na.rm=TRUE),logLik=sum(logLik))
+mf1_agg
 # parameters are recoverable
+
 
 PR2 <- replicate(5, simplify=TRUE, {
     columns <- c('alpha','beta','lambda','tau','logLik')
@@ -394,12 +407,17 @@ PR2 <- replicate(5, simplify=TRUE, {
             return(mysol)
         })
         sol <- as.data.frame(t(sol))
+        npars <- length(get_start_values2())
+
         which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
         which_max <- which_max[which_max != which.max(sol$logLik)]
         mle <- sol[which.max(sol$logLik),]
-        return(mle)
+        mle2 <- mle
+        mle2[,1:npars][abs(mle[, 1:npars] - sol[which_max[1], 1:npars]) > 0.01] <- NA
+        return(mle2)
     }))
-    mf_agg <- multifits2.s %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),logLik=sum(logLik))
+    mf_agg <- multifits2.s %>% summarise(alpha=mean(alpha,na.rm=TRUE),beta=mean(beta,na.rm=TRUE),lambda=mean(lambda,na.rm=TRUE),
+                                        tau=mean(tau,na.rm=TRUE),logLik=sum(logLik,na.rm=TRUE))
     dfp <- rbind(dfp,mf_agg)
     return(dfp)
 })
@@ -422,12 +440,17 @@ PR3 <- replicate(5, simplify=TRUE, {
             return(mysol)
         })
         sol <- as.data.frame(t(sol))
+        npars <- length(get_start_values3())
+
         which_max <- which(round(max(sol$logLik),3)==round(sol$logLik,3))
         which_max <- which_max[which_max != which.max(sol$logLik)]
         mle <- sol[which.max(sol$logLik),]
-        return(mle)
+        mle2 <- mle
+        mle2[,1:npars][abs(mle[, 1:npars] - sol[which_max[1], 1:npars]) > 0.01] <- NA
+        return(mle2)
     }))
-    mf_agg <- multifits3.s %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
+    mf_agg <- multifits3.s %>% summarise(alpha=mean(alpha,na.rm=TRUE),beta=mean(beta,na.rm=TRUE),lambda=mean(lambda,na.rm=TRUE),
+                                        tau=mean(tau,na.rm=TRUE),gamma=mean(gamma,na.rm=TRUE),logLik=sum(logLik,na.rm=TRUE))
     dfp <- rbind(dfp,mf_agg)
     return(dfp)
 })
@@ -436,3 +459,4 @@ PR3[,1:6] <- apply(PR3[,1:6],2,function(x) as.numeric(as.character(x)))
 PR3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
 mf3_agg
 # parameters are recoverable except for lambda
+

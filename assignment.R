@@ -90,7 +90,7 @@ mle <- sol1.lm[which.max(sol1.lm$logLik),]
 mle2 <- mle
 mle2[,1:npars][abs(mle[,1:npars] - sol1.lm[which_max[1],1:npars]) > 0.01] <- NA
 mle2
-#local minima? 
+ 
 
 ### running the function at the individual level
 multifits1 <- do.call(rbind, lapply(1:30, function(y) {
@@ -273,8 +273,8 @@ multifits3 <- do.call(rbind, lapply(1:30, function(y) {
 
 print(multifits3,row.names=FALSE)
 ### aggregated results 
-mf3_agg <- multifits3 %>% summarise(alpha=mean(alpha),beta=mean(beta),lambda=mean(lambda),
-                                    tau=mean(tau),gamma=mean(gamma),logLik=sum(logLik))
+mf3_agg <- multifits3 %>% summarise(alpha=mean(alpha,na.rm=TRUE),beta=mean(beta,na.rm=TRUE),lambda=mean(lambda,na.rm=TRUE),
+                                    tau=mean(tau,na.rm=TRUE),gamma=mean(gamma,na.rm=TRUE),logLik=sum(logLik,na.rm=TRUE))
 mf3_agg
 
 
@@ -282,13 +282,19 @@ mf3_agg
 # MODEL COMPARISON
 ## Likelihood-Ratio Test
 ### Model 2 is a nested version of Model 3 where $\gamma$ is equal to 1. Is Model 1 a nested version of Model 2 where 
-### $\beta$ = $\alpha$
+### $\beta$ = $\alpha$? Yes.
 
-l.specific <- mf2_agg$logLik
-l.general <- mf3_agg$logLik
-chi.stat <- -2*(l.specific - l.general)
-1 - pchisq(chi.stat,30)
-### we reject the null hypothesis, the general model fits the data better
+
+l.1 <- mf1_agg$logLik
+l.2 <- mf2_agg$logLik
+l.3 <- mf3_agg$logLik
+chi.stat1 <- -2*(l.1 - l.2)
+chi.stat2 <- -2*(l.1 - l.3)
+chi.stat3 <- -2*(l.2 - l.3)
+1 - pchisq(chi.stat1,1)
+1 - pchisq(chi.stat2,2)
+1 - pchisq(chi.stat3,1)
+### we reject the null hypothesis, the general model fits the data better, model 3 being the best model to use
 
 ## AIC Test
 columns <- c('model','logLik','K','N')
@@ -324,7 +330,7 @@ multifits3 %>% ggplot(aes(x=logLik)) + geom_histogram(bins=8)
 
 logLik_avg <- (multifits1$logLik + multifits2$logLik + multifits3$logLik)/3
 logLik_avg
-plot(x=-logLik_avg,type='h')
+plot(x=-multifits1$logLik,type='h')
 ### add graphs of fits
 
 

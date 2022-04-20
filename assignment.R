@@ -1,17 +1,16 @@
 # **ASSIGNMENT**
 library(ggplot2)
+library(cowplot)
 library(ggpubr)
-library(plot3D)
 library(tidyverse)
 library(readxl)
 library(GGally)
-library(yardstick)
 library(caret)
 library(cvms)
 
 
 
-set.seed(23)
+set.seed(23)    # seed for random generators
 # IMPORTING DATA AND DATA WRANGLING
 d1 <- as_tibble(read_excel('DATA_Study2_Rieskamp_2008_.xls',sheet=2))
 d1
@@ -39,7 +38,8 @@ dt <- dt %>% mutate(EV_A=num((A1_prob*A1_payoff)+(A2_prob*A2_payoff),digits=4),
     EV_B=num((B1_prob*B1_payoff)+(B2_prob*B2_payoff),digits=4))
 dt <- dt %>% mutate(EV_diff = (EV_A-EV_B))
 ggplot(dt,mapping=aes(x=EV_diff)) + geom_histogram()
-ggplot(dt,aes(x=EV_diff,y=choice)) + geom_point(size=0.1) + geom_smooth()
+ggplot(dt,aes(x=EV_diff,y=choice)) + geom_point(size=0.1) + geom_smooth() +
+    theme_cowplot()
 dt <- dt %>% rename(A1p=A1_prob,A1=A1_payoff,A2p=A2_prob,A2=A2_payoff,B1p=B1_prob,B1=B1_payoff,B2p=B2_prob,B2=B2_payoff)
 
 # MODELLING
@@ -405,15 +405,17 @@ l.1 <- mf1_agg$logLik.T
 l.2 <- mf2_agg$logLik.T
 l.3 <- mf3_agg$logLik.T
 l.4 <- mf4_agg$logLik.T
-chi.stat1 <- -2*(l.1 - l.2)
-chi.stat2 <- -2*(l.1 - l.3)
-chi.stat3 <- -2*(l.2 - l.3)
-chi.stat4 <- -2*(l.4 - l.3)
+chi.stat1 <- -2*(l.1 - l.2)     # model 1 v. model 2
+chi.stat2 <- -2*(l.1 - l.3)     # model 1 v. model 3
+chi.stat3 <- -2*(l.2 - l.3)     # model 2 v. model 3
+chi.stat4 <- -2*(l.4 - l.3)     # model 4 v. model 3
+### p-values for LHR test
 1 - pchisq(chi.stat1,30)
 1 - pchisq(chi.stat2,60)
 1 - pchisq(chi.stat3,30)
 1 - pchisq(chi.stat4,1)
 ### we reject the null hypothesis, the general model fits the data better, model 3 being the best model to use
+### (unless we include model 4)
 
 ## AIC Test
 columns <- c('model','logLik.T','K','N')
@@ -459,12 +461,12 @@ dt$choice <- as.factor(dt$choice)
 
 # VISUALISATION
 ## correlation plots
-multifits1 %>% select(alpha,lambda,tau) %>% ggpairs() 
-multifits2 %>% select(alpha,beta,lambda,tau) %>% ggpairs()
-multifits3 %>% select(alpha,beta,lambda,tau,gamma) %>% ggpairs()
-multifits4 %>% select(alpha,beta,tau,gamma) %>% ggpairs()
+multifits1 %>% select(alpha,lambda,tau) %>% ggpairs() + theme_bw()
+multifits2 %>% select(alpha,beta,lambda,tau) %>% ggpairs() + theme_bw()
+multifits3 %>% select(alpha,beta,lambda,tau,gamma) %>% ggpairs() + theme_bw()
+multifits4 %>% select(alpha,beta,tau,gamma) %>% ggpairs() + theme_bw()
 
-cor.test(multifits2$alpha,multifits2$tau)
+
 
 ## confusion matrices of accuracy
 cm1 <- confusionMatrix(dt$choice.pt1,dt$choice)
@@ -495,22 +497,9 @@ plot_confusion_matrix(plt,
                       prediction_col = "Prediction",
                       counts_col = "n")
 
-## functional form graphs
-
-
-
-multifits2 %>% ggplot(aes(x=lambda)) + geom_histogram(bins=30)
-sd(multifits2$lambda,na.rm=TRUE)
-multifits3 %>% ggplot(aes(x=logLik)) + geom_histogram(bins=8)
-
-logLik_avg <- (multifits1$logLik + multifits2$logLik + multifits3$logLik)/3
-logLik_avg
-plot(x=-multifits1$logLik,type='h')
-### add graphs of fits
 
 
 # PARAMETER RECOVERY
-## double-check the decision generator function
 decision_generator <- function(probability) {
     r.prob <- runif(1,0,1)
     choice <- ifelse(probability <= r.prob, 1, 0)
